@@ -2,6 +2,9 @@ name: Build & Release Android APK
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - 'v*'
   workflow_dispatch:
@@ -11,11 +14,13 @@ permissions:
 
 jobs:
   build:
-    name: Build APK and Publish Release
+    name: Build APK and Publish
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -24,11 +29,20 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew || true
+      - name: Ensure Gradle Wrapper is executable
+        run: |
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper || true
+          fi
+          chmod +x gradlew || true
 
       - name: Build Android APK
-        run: ./gradlew assembleRelease || ./gradlew assembleDebug
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleRelease || ./gradlew assembleDebug
+          else
+            gradle assembleRelease || gradle assembleDebug
+          fi
 
       - name: Locate APK File
         id: find_apk
@@ -40,8 +54,17 @@ jobs:
           fi
           echo "Found APK at: $APK_PATH"
           echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          APK_FILENAME=$(basename "$APK_PATH")
+          echo "apk_filename=$APK_FILENAME" >> $GITHUB_OUTPUT
 
-      - name: Create GitHub Release
+      - name: Upload APK as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.find_apk.outputs.apk_filename }}
+          path: ${{ steps.find_apk.outputs.apk_path }}
+          retention-days: 14
+
+      - name: Create GitHub Release (for Tags)
         id: create_release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
@@ -51,14 +74,13 @@ jobs:
           body: |
             ## Релиз ${{ github.ref_name }}
             - Приложение: **Эббингауз: Интервальные повторения**
-            - Версия: `${{ github.ref_name }}`
-            - Сборка: APK файл прикреплен ниже
+            - Сборка: APK файл прикреплен к релизу
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Send Release Notification to Telegram
+      - name: Send Notification to Telegram
         if: success()
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -69,20 +91,30 @@ jobs:
             exit 0
           fi
 
-          TAG_NAME="${{ github.ref_name }}"
           REPO_NAME="${{ github.repository }}"
           REPO_URL="${{ github.server_url }}/${REPO_NAME}"
-          RELEASE_URL="${REPO_URL}/releases/tag/${TAG_NAME}"
+          COMMIT_HASH="${{ github.sha }}"
+          SHORT_SHA="${COMMIT_HASH:0:7}"
           COMMIT_MSG="${{ github.event.head_commit.message }}"
+          COMMIT_URL="${REPO_URL}/commit/${COMMIT_HASH}"
 
-          MESSAGE="🚀 <b>Доступна новая версия: ${TAG_NAME}!</b>%0A%0A"
-          MESSAGE+="📦 <b>Проект:</b> <code>${REPO_NAME}</code>%0A"
-          MESSAGE+="🏷 <b>Версия:</b> <code>${TAG_NAME}</code>%0A"
-          if [ -n "$COMMIT_MSG" ]; then
-            SAFE_MSG=$(echo "$COMMIT_MSG" | head -n 3 | sed 's/[<>&]/ /g')
-            MESSAGE+="📝 <b>Описание:</b>%0A<i>${SAFE_MSG}</i>%0A%0A"
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+            MESSAGE="🚀 <b>Доступен новый релиз: ${TAG_NAME}!</b>%0A%0A"
+            MESSAGE+="📦 <b>Репозиторий:</b> <code>${REPO_NAME}</code>%0A"
+            MESSAGE+="🏷 <b>Тег:</b> <code>${TAG_NAME}</code>%0A"
+            MESSAGE+="📥 <b>Скачать релиз:</b> <a href=\"${REPO_URL}/releases/tag/${TAG_NAME}\">Перейти на GitHub</a>"
+          else
+            BRANCH_NAME="${{ github.ref_name }}"
+            MESSAGE="⚡ <b>Автоматическая компиляция APK после синхронизации из GAS!</b>%0A%0A"
+            MESSAGE+="📦 <b>Репозиторий:</b> <code>${REPO_NAME}</code>%0A"
+            MESSAGE+="🌿 <b>Ветка:</b> <code>${BRANCH_NAME}</code> (коммит <code>${SHORT_SHA}</code>)%0A"
+            if [ -n "$COMMIT_MSG" ]; then
+              SAFE_MSG=$(echo "$COMMIT_MSG" | head -n 2 | sed 's/[<>&]/ /g')
+              MESSAGE+="💬 <b>Коммит:</b> <i>${SAFE_MSG}</i>%0A"
+            fi
+            MESSAGE+="🔗 <a href=\"${COMMIT_URL}\">Просмотреть изменения</a>"
           fi
-          MESSAGE+="📥 <b>Скачать релиз:</b> <a href=\"${RELEASE_URL}\">Перейти на GitHub</a>"
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d "chat_id=${TELEGRAM_CHAT_ID}" \
@@ -90,7 +122,7 @@ jobs:
             -d "disable_web_page_preview=false" \
             -d "text=${MESSAGE}"
 
-      - name: Upload Binary to Telegram
+      - name: Upload Binary APK to Telegram
         if: success()
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -101,9 +133,10 @@ jobs:
             if [ -f "$APK_FILE" ]; then
               FILE_SIZE=$(stat -c%s "$APK_FILE" 2>/dev/null || stat -f%z "$APK_FILE" 2>/dev/null || echo 0)
               if [ "$FILE_SIZE" -lt 52428800 ]; then
+                CAPTION="📱 <b>Эббингауз APK</b> (Сборка GitHub Actions: <code>${{ github.ref_name }}</code>)"
                 curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
                   -F chat_id="${TELEGRAM_CHAT_ID}" \
-                  -F caption="📱 Файл релиза <b>${{ github.ref_name }}</b>" \
+                  -F caption="${CAPTION}" \
                   -F parse_mode="HTML" \
                   -F document=@"${APK_FILE}"
               else
