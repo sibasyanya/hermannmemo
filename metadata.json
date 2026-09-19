@@ -1,0 +1,6 @@
+{
+  "name": "Эббингауз - Интервальные повторения",
+  "description": "Умное обучающее приложение на основе кривой забывания Эббингауза, адаптивного интервального алгоритма и защиты от лавины долгов.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
