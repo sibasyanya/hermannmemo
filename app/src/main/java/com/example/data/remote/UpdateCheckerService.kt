@@ -21,8 +21,8 @@ object UpdateCheckerService {
 
     // Default repository or user-configured GitHub repository
     const val DEFAULT_REPO_PATH = "cybermasters/ebbinghaus-android"
-    const val CURRENT_VERSION_NAME = "1.0.1"
-    const val CURRENT_VERSION_CODE = 2
+    const val CURRENT_VERSION_NAME = "1.0.2"
+    const val CURRENT_VERSION_CODE = 3
 
     suspend fun checkLatestRelease(repoPath: String = DEFAULT_REPO_PATH): Result<AppReleaseInfo> = withContext(Dispatchers.IO) {
         try {

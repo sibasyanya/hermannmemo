@@ -22,10 +22,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
           cache: gradle
 
@@ -39,9 +39,9 @@ jobs:
       - name: Build Android APK
         run: |
           if [ -f "./gradlew" ]; then
-            ./gradlew assembleRelease || ./gradlew assembleDebug
+            ./gradlew assembleRelease --stacktrace || ./gradlew assembleDebug --stacktrace
           else
-            gradle assembleRelease || gradle assembleDebug
+            gradle assembleRelease --stacktrace || gradle assembleDebug --stacktrace
           fi
 
       - name: Locate APK File
