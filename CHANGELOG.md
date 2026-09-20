@@ -1,5 +1,13 @@
 # Журнал изменений (CHANGELOG)
 
+## [1.0.3] - 2026-09-20
+### Добавлено и исправлено
+- Добавлен автоматический шаг восстановления и генерации `debug.keystore` в CI GitHub Actions для устранения сбоя подписания APK (keystore file not found).
+- Включено подробное диагностическое логирование Gradle (`--info`, `--stacktrace`, `--no-daemon`) с перенаправлением логов в файлы `gradle_release.log` и `gradle_debug.log`.
+- Добавлена автоматическая выгрузка логов сборки и отчетов (`build-failure-logs`) в артефакты Workflow при любом сбое сборки.
+- Добавлена отправка уведомления об ошибке сборки в Telegram.
+- Оптимизированы параметры памяти Gradle (`GRADLE_OPTS: -Xmx3g -XX:MaxMetaspaceSize=1g`) для предотвращения падений GitHub Actions runner по нехватке памяти (OOM).
+
 ## [1.0.2] - 2026-09-20
 ### Исправлено
 - Устранена ошибка компиляции KSP в GitHub Actions (`ksp.com.intellij.openapi.application.Application.getService is null`), вызванная устаревшим процессором кодогенерации Moshi.
