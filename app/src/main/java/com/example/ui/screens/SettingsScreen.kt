@@ -116,7 +116,7 @@ fun SettingsScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "v${UpdateCheckerService.CURRENT_VERSION_NAME} (Сборка ${UpdateCheckerService.CURRENT_VERSION_CODE})",
+                                    text = "v${UpdateCheckerService.currentVersionName} (Сборка ${UpdateCheckerService.currentVersionCode})",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

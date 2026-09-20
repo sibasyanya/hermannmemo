@@ -38,10 +38,14 @@ import androidx.compose.material.icons.filled.LockClock
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.UnfoldLess
+import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -85,12 +89,9 @@ data class InstructionSection(
 fun InstructionsScreen(
     modifier: Modifier = Modifier
 ) {
+    // All cards are collapsed by default per user request
     val expandedStates = remember {
-        mutableStateMapOf<String, Boolean>().apply {
-            // First two items open by default
-            put("ebbinghaus", true)
-            put("miller", true)
-        }
+        mutableStateMapOf<String, Boolean>()
     }
 
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -230,6 +231,8 @@ fun InstructionsScreen(
         )
     }
 
+    val areAllExpanded = sections.isNotEmpty() && sections.all { expandedStates[it.id] == true }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -244,6 +247,23 @@ fun InstructionsScreen(
                             text = "Научные принципы и руководство Hermann Memo",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            val targetState = !areAllExpanded
+                            sections.forEach { section ->
+                                expandedStates[section.id] = targetState
+                            }
+                        },
+                        modifier = Modifier.testTag("toggle_all_instructions_button")
+                    ) {
+                        Icon(
+                            imageVector = if (areAllExpanded) Icons.Default.UnfoldLess else Icons.Default.UnfoldMore,
+                            contentDescription = if (areAllExpanded) "Свернуть все карточки" else "Развернуть все карточки",
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
@@ -309,6 +329,43 @@ fun InstructionsScreen(
                             text = "Hermann Memo — это не просто программа для карточек, а когнитивный тренажер. Приложение объединяет кривую забывания Эббингауза, теорию кошелька Миллера и атомарное кодирование фактов для гарантированного переноса знаний в долговременную память.",
                             style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
                             color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+
+            // Quick Toggle Bar
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Разделы руководства (${sections.size})",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    FilledTonalButton(
+                        onClick = {
+                            val targetState = !areAllExpanded
+                            sections.forEach { section ->
+                                expandedStates[section.id] = targetState
+                            }
+                        },
+                        modifier = Modifier.testTag("quick_toggle_all_button"),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (areAllExpanded) Icons.Default.UnfoldLess else Icons.Default.UnfoldMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (areAllExpanded) "Свернуть все" else "Развернуть все",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                         )
                     }
                 }

@@ -1,5 +1,6 @@
 package com.example.data.remote
 
+import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -19,10 +20,14 @@ data class AppReleaseInfo(
 
 object UpdateCheckerService {
 
-    // Default repository or user-configured GitHub repository
+    // Default repository path on GitHub
     const val DEFAULT_REPO_PATH = "cybermasters/ebbinghaus-android"
-    const val CURRENT_VERSION_NAME = "1.0.3"
-    const val CURRENT_VERSION_CODE = 4
+
+    val currentVersionName: String
+        get() = BuildConfig.VERSION_NAME
+
+    val currentVersionCode: Int
+        get() = BuildConfig.VERSION_CODE
 
     suspend fun checkLatestRelease(repoPath: String = DEFAULT_REPO_PATH): Result<AppReleaseInfo> = withContext(Dispatchers.IO) {
         try {
@@ -30,7 +35,7 @@ object UpdateCheckerService {
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            conn.setRequestProperty("User-Agent", "Ebbinghaus-App")
+            conn.setRequestProperty("User-Agent", "Hermann-Memo-App")
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
 
@@ -60,7 +65,7 @@ object UpdateCheckerService {
                 }
 
                 val remoteVersionClean = tagName.removePrefix("v").trim()
-                val isUpdateAvailable = isRemoteVersionHigher(remoteVersionClean, CURRENT_VERSION_NAME)
+                val isUpdateAvailable = isRemoteVersionHigher(remoteVersionClean, currentVersionName)
 
                 Result.success(
                     AppReleaseInfo(
@@ -73,19 +78,19 @@ object UpdateCheckerService {
                     )
                 )
             } else if (responseCode == 404) {
-                // Repository releases not published yet
+                // Repository releases not published yet or private
                 Result.success(
                     AppReleaseInfo(
-                        tagName = "v$CURRENT_VERSION_NAME",
-                        releaseName = "Релиз v$CURRENT_VERSION_NAME (Текущая)",
+                        tagName = "v$currentVersionName",
+                        releaseName = "Релиз v$currentVersionName (Текущая)",
                         changelog = "Вы используете самую актуальную версию приложения.",
                         downloadUrl = "",
                         isUpdateAvailable = false,
-                        publishedAt = "2026-09-19"
+                        publishedAt = "Актуально"
                     )
                 )
             } else {
-                Result.failure(Exception("Сервер вернул код $responseCode"))
+                Result.failure(Exception("Сервер GitHub вернул код ответа: $responseCode"))
             }
         } catch (e: Exception) {
             Result.failure(e)
