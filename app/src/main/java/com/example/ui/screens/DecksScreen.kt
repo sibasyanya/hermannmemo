@@ -90,7 +90,7 @@ fun DecksScreen(
                 title = {
                     Column {
                         Text(
-                            text = "Эббингауз",
+                            text = "Hermann Memo",
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(

@@ -2,6 +2,7 @@ package com.example.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
@@ -24,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.ui.screens.DeckDetailScreen
 import com.example.ui.screens.DecksScreen
+import com.example.ui.screens.InstructionsScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.StatisticsScreen
 import com.example.ui.screens.StudySessionScreen
@@ -32,6 +34,7 @@ import com.example.ui.viewmodel.MainViewModel
 sealed class Screen(val route: String, val title: String, val icon: ImageVector? = null) {
     object Decks : Screen("decks", "Темы", Icons.Default.School)
     object Stats : Screen("stats", "Память", Icons.Default.BarChart)
+    object Instructions : Screen("instructions", "Инструкции", Icons.AutoMirrored.Filled.MenuBook)
     object Settings : Screen("settings", "Настройки", Icons.Default.Settings)
     object StudySession : Screen("study_session", "Сессия")
     object DeckDetail : Screen("deck_detail/{deckId}", "Детали") {
@@ -51,12 +54,14 @@ fun AppNavigation(
     val bottomNavItems = listOf(
         Screen.Decks,
         Screen.Stats,
+        Screen.Instructions,
         Screen.Settings
     )
 
     val showBottomBar = currentRoute in listOf(
         Screen.Decks.route,
         Screen.Stats.route,
+        Screen.Instructions.route,
         Screen.Settings.route
     )
 
@@ -109,6 +114,10 @@ fun AppNavigation(
 
             composable(Screen.Stats.route) {
                 StatisticsScreen(viewModel = viewModel)
+            }
+
+            composable(Screen.Instructions.route) {
+                InstructionsScreen()
             }
 
             composable(Screen.Settings.route) {

@@ -163,7 +163,7 @@ class StudyRepository(
                 val availableNew = if (deckId != null) {
                     flashcardDao.getNewCardsForDeck(deckId).first()
                 } else {
-                    emptyList()
+                    flashcardDao.getAllNewCards().first()
                 }
                 availableNew.take(remainingNewQuota)
             } else {

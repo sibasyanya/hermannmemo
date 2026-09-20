@@ -1,9 +1,13 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -45,8 +49,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,7 +82,9 @@ fun StudySessionScreen(
     modifier: Modifier = Modifier
 ) {
     val sessionState by viewModel.sessionState.collectAsState()
-    val currentCard = viewModel.currentCard()
+    val currentCard = remember(sessionState.queue, sessionState.currentIndex) {
+        sessionState.queue.getOrNull(sessionState.currentIndex)
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -147,10 +156,15 @@ fun StudySessionScreen(
                 )
             } else if (currentCard != null) {
                 // Active flashcard view
+                val scrollState = rememberScrollState()
+                LaunchedEffect(sessionState.currentIndex) {
+                    scrollState.scrollTo(0)
+                }
+
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(scrollState)
                         .padding(horizontal = 20.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -163,146 +177,157 @@ fun StudySessionScreen(
                             )
                         }
 
-                        // Atomic Flashcard Card
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animateContentSize()
-                                .testTag("flashcard_container"),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp)
-                            ) {
-                                // Tag bar
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(MaterialTheme.colorScheme.primaryContainer)
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = "Атомарный факт",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
-
-                                    if (currentCard.isHeavy) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(BadGradeContainer)
-                                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        ) {
-                                            Text(
-                                                text = "Тяжелая карточка",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                                color = BadGradeColor
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(20.dp))
-
-                                // Question
-                                Text(
-                                    text = "Вопрос:",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = currentCard.question,
-                                    style = MaterialTheme.typography.headlineSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        lineHeight = 30.sp
+                        // Atomic Flashcard Card with AnimatedContent
+                        AnimatedContent(
+                            targetState = currentCard,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = tween(220)) + scaleIn(initialScale = 0.96f, animationSpec = tween(220)))
+                                    .togetherWith(fadeOut(animationSpec = tween(100)))
+                            },
+                            label = "card_progression_animation"
+                        ) { card ->
+                            key(card.id, sessionState.currentIndex) {
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .animateContentSize()
+                                        .testTag("flashcard_container"),
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surface
                                     ),
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.testTag("card_question_text")
-                                )
-
-                                // Optional Hint
-                                if (currentCard.hint.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    if (!sessionState.isHintVisible) {
-                                        OutlinedButton(
-                                            onClick = { viewModel.toggleHint() },
-                                            modifier = Modifier.testTag("toggle_hint_button")
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Lightbulb,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Показать мнемонику / подсказку")
-                                        }
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                                .padding(12.dp)
-                                        ) {
-                                            Row(verticalAlignment = Alignment.Top) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Lightbulb,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = currentCard.hint,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Answer section
-                                Spacer(modifier = Modifier.height(24.dp))
-                                if (sessionState.isAnswerRevealed) {
-                                    Box(
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                ) {
+                                    Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
-                                            .padding(16.dp)
-                                            .testTag("revealed_answer_box")
+                                            .padding(24.dp)
                                     ) {
-                                        Column {
-                                            Text(
-                                                text = "Ответ:",
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = currentCard.answer,
-                                                style = MaterialTheme.typography.titleLarge.copy(
-                                                    fontWeight = FontWeight.SemiBold,
-                                                    lineHeight = 28.sp
-                                                ),
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
+                                        // Tag bar
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(MaterialTheme.colorScheme.primaryContainer)
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = "Атомарный факт",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                            }
+
+                                            if (card.isHeavy) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(BadGradeContainer)
+                                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "Тяжелая карточка",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = BadGradeColor
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(20.dp))
+
+                                        // Question
+                                        Text(
+                                            text = "Вопрос:",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = card.question,
+                                            style = MaterialTheme.typography.headlineSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                lineHeight = 30.sp
+                                            ),
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.testTag("card_question_text")
+                                        )
+
+                                        // Optional Hint
+                                        if (card.hint.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            if (!sessionState.isHintVisible) {
+                                                OutlinedButton(
+                                                    onClick = { viewModel.toggleHint() },
+                                                    modifier = Modifier.testTag("toggle_hint_button")
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Lightbulb,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("Показать мнемонику / подсказку")
+                                                }
+                                            } else {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                                                        .padding(12.dp)
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.Top) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Lightbulb,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(
+                                                            text = card.hint,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Answer section
+                                        Spacer(modifier = Modifier.height(24.dp))
+                                        if (sessionState.isAnswerRevealed) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(14.dp))
+                                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                                                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+                                                    .padding(16.dp)
+                                                    .testTag("revealed_answer_box")
+                                            ) {
+                                                Column {
+                                                    Text(
+                                                        text = "Ответ:",
+                                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = card.answer,
+                                                        style = MaterialTheme.typography.titleLarge.copy(
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            lineHeight = 28.sp
+                                                        ),
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }

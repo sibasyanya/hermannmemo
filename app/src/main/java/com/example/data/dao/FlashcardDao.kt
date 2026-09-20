@@ -33,6 +33,9 @@ interface FlashcardDao {
     @Query("SELECT * FROM flashcards WHERE deckId = :deckId AND status = 'NEW' ORDER BY id ASC")
     fun getNewCardsForDeck(deckId: Long): Flow<List<FlashcardEntity>>
 
+    @Query("SELECT * FROM flashcards WHERE status = 'NEW' ORDER BY id ASC")
+    fun getAllNewCards(): Flow<List<FlashcardEntity>>
+
     @Query("SELECT COUNT(*) FROM flashcards WHERE status != 'NEW' AND dueDate <= :currentTime")
     suspend fun countOverdueCards(currentTime: Long): Int
 

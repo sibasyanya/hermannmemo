@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface UpdateUiState {
@@ -129,19 +130,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun submitCardRating(grade: ReviewGrade) {
-        val currentCard = currentCard() ?: return
+        val state = _sessionState.value
+        val cardToReview = state.queue.getOrNull(state.currentIndex) ?: return
         viewModelScope.launch {
-            repository.recordCardReview(currentCard, grade)
-            val nextIndex = _sessionState.value.currentIndex + 1
-            val isFinished = nextIndex >= _sessionState.value.queue.size
-
-            _sessionState.value = _sessionState.value.copy(
-                currentIndex = nextIndex,
-                isAnswerRevealed = false,
-                isHintVisible = false,
-                isSessionFinished = isFinished,
-                reviewedCount = _sessionState.value.reviewedCount + 1
-            )
+            repository.recordCardReview(cardToReview, grade)
+            _sessionState.update { current ->
+                val nextIndex = current.currentIndex + 1
+                current.copy(
+                    currentIndex = nextIndex,
+                    isAnswerRevealed = false,
+                    isHintVisible = false,
+                    isSessionFinished = nextIndex >= current.queue.size,
+                    reviewedCount = current.reviewedCount + 1
+                )
+            }
             refreshQuotaAndBacklogStatus()
         }
     }

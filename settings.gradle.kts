@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Ebbinghaus"
+rootProject.name = "Hermann Memo"
 
 include(":app")
