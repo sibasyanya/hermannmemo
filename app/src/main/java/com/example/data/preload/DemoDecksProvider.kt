@@ -17,6 +17,7 @@ object DemoDecksProvider {
             createRussianHistoryDeck(),
             createMathDeck(),
             createBiologyDeck(),
+            createAnatomyDeck(),
             createGeographyDeck(),
             createProgrammingDeck(),
             createPhysicsDeck(),
@@ -31,6 +32,7 @@ object DemoDecksProvider {
             title = "Английский язык",
             description = "Популярные идиомы, устойчивые выражения и нерегулярные глаголы",
             category = "Языки",
+            level = "BASIC",
             iconName = "translate",
             colorHex = "#3B82F6",
             isDefault = true
@@ -52,6 +54,7 @@ object DemoDecksProvider {
             title = "История России",
             description = "Ключевые даты, великие реформы и исторические вехи",
             category = "История",
+            level = "BASIC",
             iconName = "history",
             colorHex = "#EF4444",
             isDefault = true
@@ -73,6 +76,7 @@ object DemoDecksProvider {
             title = "Основы математики",
             description = "Фундаментальные формулы, аксиомы и константы",
             category = "Точные науки",
+            level = "ADVANCED",
             iconName = "calculate",
             colorHex = "#10B981",
             isDefault = true
@@ -91,22 +95,45 @@ object DemoDecksProvider {
 
     private fun createBiologyDeck() = DeckWithCards(
         deck = DeckEntity(
-            title = "Биология и анатомия",
-            description = "Строение человека, физиология органов и клеточные процессы",
-            category = "Естествознание",
+            title = "Общая биология",
+            description = "Строение клетки, органеллы, фотосинтез, ДНК и обмен веществ",
+            category = "Биология",
+            level = "BASIC",
             iconName = "biotech",
             colorHex = "#14B8A6",
+            isDefault = true
+        ),
+        cards = listOf(
+            createCard("Какую органеллу называют «энергетической станцией клетки»?", "Митохондрия", "Синтезирует молекулы АТФ"),
+            createCard("Основная биологическая функция рибосом в клетке", "Синтез белка (трансляция)", "Считывают информацию с иРНК"),
+            createCard("Какая молекула хранит и передает генетическую информацию?", "ДНК (дезоксирибонуклеиновая кислота)", "Двойная спираль"),
+            createCard("Какой пигмент отвечает за процесс фотосинтеза у растений?", "Хлорофилл", "Придает растениям зеленый цвет"),
+            createCard("Как называется процесс деления соматических клеток с сохранением набора хромосом?", "Митоз", "Образуются две идентичные клетки"),
+            createCard("Основная биологическая роль ферментов в организме", "Биологические катализаторы", "Ускоряют биохимические реакции"),
+            createCard("Какой газ выделяется растениями на свету при фотосинтезе?", "Кислород (O₂)", "Образуется при фотолизе воды"),
+            createCard("В каких органеллах растительной клетки происходит фотосинтез?", "Хлоропласты", "Содержат хлорофилл")
+        )
+    )
+
+    private fun createAnatomyDeck() = DeckWithCards(
+        deck = DeckEntity(
+            title = "Анатомия человека",
+            description = "Скелет, кровеносная система, внутренние органы и физиология",
+            category = "Анатомия",
+            level = "ADVANCED",
+            iconName = "accessibility",
+            colorHex = "#059669",
             isDefault = true
         ),
         cards = listOf(
             createCard("Сколько костей в скелете взрослого человека в норме?", "206 костей", "У младенцев их около 270, позже срастаются"),
             createCard("Какая железа является самой крупной в теле человека?", "Печень", "Масса около 1.5 кг"),
             createCard("Основная биологическая функция эритроцитов крови", "Перенос кислорода (гемоглобин)", "Красные кровяные тельца"),
-            createCard("Какую органеллу называют «энергетической станцией клетки»?", "Митохондрия", "Синтезирует молекулы АТФ"),
+            createCard("Сколько камер в сердце человека?", "4 (2 предсердия и 2 желудочка)", "Полное разделение артериального и венозного русла"),
             createCard("Нормальная частота пульса взрослого человека в покое", "60–80 ударов в минуту", "ЧСС в спокойном состоянии"),
-            createCard("Какая кость является самой длинной и прочной в теле?", "Бедренная кость", "Выдерживает огромные осевые нагрузки"),
+            createCard("Какая кость является самой длинной и прочной в теле человека?", "Бедренная кость", "Выдерживает огромные осевые нагрузки"),
             createCard("Какой орган вырабатывает гормон инсулин?", "Поджелудочная железа", "Бета-клетки островков Лангерганса"),
-            createCard("Сколько камер в сердце человека?", "4 (2 предсердия и 2 желудочка)", "Полное разделение артериального и венозного русла")
+            createCard("Какой кровеносный сосуд является самым крупным в теле человека?", "Аорта", "Берет начало от левого желудочка")
         )
     )
 
@@ -115,6 +142,7 @@ object DemoDecksProvider {
             title = "География мира",
             description = "Столицы государств, рекордные озера, проливы и горные системы",
             category = "География",
+            level = "BASIC",
             iconName = "public",
             colorHex = "#0EA5E9",
             isDefault = true
@@ -136,6 +164,7 @@ object DemoDecksProvider {
             title = "Программирование и CS",
             description = "Алгоритмическая сложность, структуры данных и концепции ООП",
             category = "IT",
+            level = "ADVANCED",
             iconName = "code",
             colorHex = "#8B5CF6",
             isDefault = true
@@ -157,6 +186,7 @@ object DemoDecksProvider {
             title = "Физика: законы и константы",
             description = "Скорость света, термодинамика, электродинамика и механика",
             category = "Точные науки",
+            level = "ADVANCED",
             iconName = "science",
             colorHex = "#F59E0B",
             isDefault = true
@@ -178,6 +208,7 @@ object DemoDecksProvider {
             title = "Психология и когнитивистика",
             description = "Кривая Эббингауза, закон Миллера, когнитивные искажения и память",
             category = "Когнитивистика",
+            level = "EXPERT",
             iconName = "psychology",
             colorHex = "#EC4899",
             isDefault = true
@@ -199,6 +230,7 @@ object DemoDecksProvider {
             title = "Астрономия и космос",
             description = "Планеты Солнечной системы, космические миссии и галактики",
             category = "Астрономия",
+            level = "ADVANCED",
             iconName = "telescope",
             colorHex = "#6366F1",
             isDefault = true
@@ -220,6 +252,7 @@ object DemoDecksProvider {
             title = "Мировое искусство",
             description = "Шедевры живописи, великие мастера Возрождения и авангард",
             category = "Культура",
+            level = "BASIC",
             iconName = "palette",
             colorHex = "#D97706",
             isDefault = true

@@ -142,6 +142,62 @@ object EbbinghausEngine {
         }
     }
 
+    data class ProgressForecast(
+        val totalCards: Int,
+        val newCards: Int,
+        val learningCards: Int,
+        val reviewCards: Int,
+        val masteredCards: Int,
+        val progressPercentage: Int,
+        val estimatedDays: Int,
+        val forecastDescription: String
+    )
+
+    /**
+     * Calculates the estimated duration and progress forecast for mastering a deck.
+     */
+    fun calculateProgressForecast(
+        cards: List<FlashcardEntity>,
+        newCardsPerDay: Int = 5
+    ): ProgressForecast {
+        val total = cards.size
+        if (total == 0) {
+            return ProgressForecast(0, 0, 0, 0, 0, 0, 0, "В теме пока нет карточек")
+        }
+        val newCount = cards.count { it.status == CardStatus.NEW }
+        val learningCount = cards.count { it.status == CardStatus.LEARNING }
+        val reviewCount = cards.count { it.status == CardStatus.REVIEW }
+        val masteredCount = cards.count { it.status == CardStatus.MASTERED }
+
+        val weightedScore = (masteredCount * 1.0) + (reviewCount * 0.55) + (learningCount * 0.25)
+        val progressPercentage = ((weightedScore / total) * 100).toInt().coerceIn(0, 100)
+
+        val daysToStudyNew = kotlin.math.ceil(newCount.toDouble() / newCardsPerDay.coerceAtLeast(1)).toInt()
+        val estimatedDays = if (masteredCount == total) {
+            0
+        } else {
+            max(1, daysToStudyNew + (if (newCount > 0) 10 else 5))
+        }
+
+        val description = when {
+            masteredCount == total -> "Тема полностью освоена и закреплена в долговременной памяти!"
+            progressPercentage > 75 -> "Завершающая стадия: полное закрепление займет ~$estimatedDays дн."
+            progressPercentage > 35 -> "Активное запоминание: полная фиксация займет ~$estimatedDays дн."
+            else -> "Начальный этап: при $newCardsPerDay новых карточках в день тема усвоится за ~$estimatedDays дн."
+        }
+
+        return ProgressForecast(
+            totalCards = total,
+            newCards = newCount,
+            learningCards = learningCount,
+            reviewCards = reviewCount,
+            masteredCards = masteredCount,
+            progressPercentage = progressPercentage,
+            estimatedDays = estimatedDays,
+            forecastDescription = description
+        )
+    }
+
     private fun roundToDecimals(value: Double, decimals: Int): Double {
         var multiplier = 1.0
         repeat(decimals) { multiplier *= 10 }

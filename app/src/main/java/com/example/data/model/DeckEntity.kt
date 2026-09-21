@@ -10,6 +10,7 @@ data class DeckEntity(
     val title: String,
     val description: String,
     val category: String,
+    val level: String = "BASIC", // "BASIC" (Базовый), "ADVANCED" (Специалист), "EXPERT" (Профи)
     val iconName: String = "school",
     val colorHex: String = "#4F46E5",
     val isDefault: Boolean = false,

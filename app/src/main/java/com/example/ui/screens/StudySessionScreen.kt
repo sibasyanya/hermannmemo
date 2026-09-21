@@ -47,8 +47,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -64,9 +66,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.algorithm.EbbinghausEngine
+import com.example.data.local.AnswerCheckMode
 import com.example.data.model.ReviewGrade
 import com.example.ui.components.BacklogBanner
 import com.example.ui.theme.BadGradeColor
@@ -303,8 +307,87 @@ fun StudySessionScreen(
                                         }
 
                                         // Answer section
-                                        Spacer(modifier = Modifier.height(24.dp))
-                                        if (sessionState.isAnswerRevealed) {
+                                        Spacer(modifier = Modifier.height(20.dp))
+
+                                        if (!sessionState.isAnswerRevealed) {
+                                            // Input field for testing knowledge
+                                            Text(
+                                                text = "Ваш ответ (для проверки знания):",
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            OutlinedTextField(
+                                                value = sessionState.userTypedAnswer,
+                                                onValueChange = { viewModel.setUserTypedAnswer(it) },
+                                                placeholder = { Text("Введите ответ или нажмите «Показать ответ»...") },
+                                                modifier = Modifier.fillMaxWidth().testTag("user_answer_input"),
+                                                shape = RoundedCornerShape(12.dp),
+                                                singleLine = false,
+                                                maxLines = 3
+                                            )
+                                        } else {
+                                            // Answer Revealed UI
+                                            if (sessionState.hasCheckedAnswer) {
+                                                if (sessionState.isAnswerCorrect) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(14.dp))
+                                                            .background(ExcellentGradeContainer)
+                                                            .border(1.dp, ExcellentGradeColor.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                                                            .padding(14.dp)
+                                                    ) {
+                                                        Column {
+                                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                                Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = ExcellentGradeColor, modifier = Modifier.size(20.dp))
+                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                Text(
+                                                                    text = "Верно!",
+                                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                                                    color = ExcellentGradeColor
+                                                                )
+                                                            }
+                                                            Spacer(modifier = Modifier.height(4.dp))
+                                                            Text(
+                                                                text = sessionState.userTypedAnswer,
+                                                                style = MaterialTheme.typography.bodyLarge,
+                                                                color = MaterialTheme.colorScheme.onSurface
+                                                            )
+                                                        }
+                                                    }
+                                                } else {
+                                                    // Incorrect user answer shown with strikethrough (User Request 1)
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clip(RoundedCornerShape(14.dp))
+                                                            .background(BadGradeContainer)
+                                                            .border(1.dp, BadGradeColor.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                                                            .padding(14.dp)
+                                                    ) {
+                                                        Column {
+                                                            Text(
+                                                                text = "Ваш ответ (неверно):",
+                                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                                color = BadGradeColor
+                                                            )
+                                                            Spacer(modifier = Modifier.height(2.dp))
+                                                            Text(
+                                                                text = sessionState.userTypedAnswer.ifBlank { "(пустой ввод)" },
+                                                                style = MaterialTheme.typography.bodyLarge.copy(
+                                                                    textDecoration = TextDecoration.LineThrough,
+                                                                    fontWeight = FontWeight.SemiBold
+                                                                ),
+                                                                color = MaterialTheme.colorScheme.error
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.height(10.dp))
+                                            }
+
+                                            // Correct Answer Box
                                             Box(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -316,7 +399,7 @@ fun StudySessionScreen(
                                             ) {
                                                 Column {
                                                     Text(
-                                                        text = "Ответ:",
+                                                        text = "Правильный ответ:",
                                                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                                         color = MaterialTheme.colorScheme.primary
                                                     )
@@ -338,71 +421,145 @@ fun StudySessionScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     // Controls Area
                     if (!sessionState.isAnswerRevealed) {
-                        Button(
-                            onClick = { viewModel.revealAnswer() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .testTag("reveal_answer_button"),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Icon(imageVector = Icons.Default.Visibility, contentDescription = null)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Показать ответ",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            if (sessionState.userTypedAnswer.isNotBlank()) {
+                                Button(
+                                    onClick = { viewModel.checkTypedAnswer() },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(54.dp)
+                                        .testTag("check_answer_button"),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Check, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Проверить мой ответ",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = { viewModel.revealAnswer() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(54.dp)
+                                    .testTag("reveal_answer_button"),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = if (sessionState.userTypedAnswer.isBlank()) {
+                                    ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                } else {
+                                    ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            ) {
+                                Icon(imageVector = Icons.Default.Visibility, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Показать ответ",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
+
+                            // Mastered Action: User already knows this card (User Request 4)
+                            TextButton(
+                                onClick = { viewModel.markCurrentCardMastered() },
+                                modifier = Modifier.fillMaxWidth().testTag("mark_mastered_direct_button")
+                            ) {
+                                Icon(imageVector = Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Я уже знаю эту карточку (Освоено)")
+                            }
                         }
                     } else {
-                        // Rating buttons
-                        Column {
-                            Text(
-                                text = "Оцените качество воспоминания:",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(bottom = 10.dp)
-                            )
+                        // When answer is revealed
+                        if (sessionState.autoResetToastMessage != null) {
+                            // Auto reset active banner (User Request 1)
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(BadGradeContainer)
+                                        .border(1.dp, BadGradeColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                        .padding(14.dp)
+                                ) {
+                                    Text(
+                                        text = sessionState.autoResetToastMessage!!,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                        color = BadGradeColor
+                                    )
+                                }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                // BAD
-                                RatingButton(
-                                    label = "Плохо",
-                                    interval = EbbinghausEngine.getIntervalPreview(currentCard, ReviewGrade.BAD),
-                                    accentColor = BadGradeColor,
-                                    containerColor = BadGradeContainer,
-                                    modifier = Modifier.weight(1f).testTag("grade_bad_button"),
-                                    onClick = { viewModel.submitCardRating(ReviewGrade.BAD) }
+                                Button(
+                                    onClick = { viewModel.advanceToNextCardAfterAutoReset() },
+                                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Text("Следующая карточка →", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                }
+                            }
+                        } else {
+                            // Rating buttons (Manual mode or correct answer)
+                            Column {
+                                Text(
+                                    text = "Оцените сложность воспоминания:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 10.dp)
                                 )
 
-                                // NORMAL
-                                RatingButton(
-                                    label = "Нормально",
-                                    interval = EbbinghausEngine.getIntervalPreview(currentCard, ReviewGrade.NORMAL),
-                                    accentColor = NormalGradeColor,
-                                    containerColor = NormalGradeContainer,
-                                    modifier = Modifier.weight(1f).testTag("grade_normal_button"),
-                                    onClick = { viewModel.submitCardRating(ReviewGrade.NORMAL) }
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    // BAD / HEAVY
+                                    RatingButton(
+                                        label = "Тяжелая",
+                                        interval = EbbinghausEngine.getIntervalPreview(currentCard, ReviewGrade.BAD),
+                                        accentColor = BadGradeColor,
+                                        containerColor = BadGradeContainer,
+                                        modifier = Modifier.weight(1f).testTag("grade_bad_button"),
+                                        onClick = { viewModel.submitCardRating(ReviewGrade.BAD) }
+                                    )
 
-                                // EXCELLENT
-                                RatingButton(
-                                    label = "Отлично",
-                                    interval = EbbinghausEngine.getIntervalPreview(currentCard, ReviewGrade.EXCELLENT),
-                                    accentColor = ExcellentGradeColor,
-                                    containerColor = ExcellentGradeContainer,
-                                    modifier = Modifier.weight(1f).testTag("grade_excellent_button"),
-                                    onClick = { viewModel.submitCardRating(ReviewGrade.EXCELLENT) }
-                                )
+                                    // NORMAL
+                                    RatingButton(
+                                        label = "Нормально",
+                                        interval = EbbinghausEngine.getIntervalPreview(currentCard, ReviewGrade.NORMAL),
+                                        accentColor = NormalGradeColor,
+                                        containerColor = NormalGradeContainer,
+                                        modifier = Modifier.weight(1f).testTag("grade_normal_button"),
+                                        onClick = { viewModel.submitCardRating(ReviewGrade.NORMAL) }
+                                    )
+
+                                    // EXCELLENT
+                                    RatingButton(
+                                        label = "Отлично",
+                                        interval = EbbinghausEngine.getIntervalPreview(currentCard, ReviewGrade.EXCELLENT),
+                                        accentColor = ExcellentGradeColor,
+                                        containerColor = ExcellentGradeContainer,
+                                        modifier = Modifier.weight(1f).testTag("grade_excellent_button"),
+                                        onClick = { viewModel.submitCardRating(ReviewGrade.EXCELLENT) }
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Mastered button: instant mastery without repeats
+                                TextButton(
+                                    onClick = { viewModel.markCurrentCardMastered() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(imageVector = Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Знаю назубок (Отметить как освоенную)")
+                                }
                             }
                         }
                     }

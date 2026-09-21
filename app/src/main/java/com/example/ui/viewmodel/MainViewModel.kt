@@ -4,7 +4,11 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.algorithm.EbbinghausEngine
+import com.example.data.ai.AiCardGeneratorService
+import com.example.data.ai.GeneratedDeckResult
 import com.example.data.db.AppDatabase
+import com.example.data.local.AnswerCheckMode
+import com.example.data.local.AppSettingsManager
 import com.example.data.model.CardStatus
 import com.example.data.model.DailyQuotaEntity
 import com.example.data.model.DeckEntity
@@ -29,6 +33,13 @@ sealed interface UpdateUiState {
     data class Error(val message: String) : UpdateUiState
 }
 
+sealed interface AiGenerationState {
+    object Idle : AiGenerationState
+    object Loading : AiGenerationState
+    data class Success(val result: GeneratedDeckResult) : AiGenerationState
+    data class Error(val message: String) : AiGenerationState
+}
+
 data class StudySessionState(
     val activeDeckId: Long? = null,
     val activeDeckTitle: String = "Все колоды",
@@ -41,16 +52,29 @@ data class StudySessionState(
     val isBacklogActive: Boolean = false,
     val totalOverdueCount: Int = 0,
     val isNewMaterialBlocked: Boolean = false,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val userTypedAnswer: String = "",
+    val hasCheckedAnswer: Boolean = false,
+    val isAnswerCorrect: Boolean = false,
+    val autoResetToastMessage: String? = null
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getInstance(application)
     val repository = StudyRepository(db.deckDao(), db.flashcardDao(), db.dailyQuotaDao())
+    val settingsManager = AppSettingsManager.getInstance(application)
+    val aiService = AiCardGeneratorService(settingsManager)
 
     val decks: StateFlow<List<DeckEntity>> = repository.allDecks
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _selectedLevelFilter = MutableStateFlow("ALL") // "ALL", "BASIC", "ADVANCED", "EXPERT"
+    val selectedLevelFilter: StateFlow<String> = _selectedLevelFilter.asStateFlow()
+
+    val filteredDecks: StateFlow<List<DeckEntity>> = kotlinx.coroutines.flow.combine(decks, selectedLevelFilter) { all, filter ->
+        if (filter == "ALL") all else all.filter { it.level.equals(filter, ignoreCase = true) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val totalCardsCount: StateFlow<Int> = repository.totalCardsCount
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
@@ -73,6 +97,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _updateState = MutableStateFlow<UpdateUiState>(UpdateUiState.Idle)
     val updateState: StateFlow<UpdateUiState> = _updateState.asStateFlow()
 
+    private val _aiState = MutableStateFlow<AiGenerationState>(AiGenerationState.Idle)
+    val aiState: StateFlow<AiGenerationState> = _aiState.asStateFlow()
+
     private val _todayQuota = MutableStateFlow(DailyQuotaEntity(dateString = repository.getTodayDateString()))
     val todayQuota: StateFlow<DailyQuotaEntity> = _todayQuota.asStateFlow()
 
@@ -89,6 +116,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setSelectedLevelFilter(level: String) {
+        _selectedLevelFilter.value = level
+    }
+
     fun refreshQuotaAndBacklogStatus() {
         viewModelScope.launch {
             val quota = repository.getTodayQuota()
@@ -102,7 +133,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startStudySession(deckId: Long?, deckTitle: String = "Все колоды") {
         viewModelScope.launch {
             _sessionState.value = _sessionState.value.copy(isLoading = true)
-            val sessionQueue = repository.prepareStudySession(deckId)
+            val sessionQueue = repository.prepareStudySession(
+                deckId = deckId,
+                strictBacklogBlocking = settingsManager.strictBacklogBlocking.value
+            )
             _sessionState.value = StudySessionState(
                 activeDeckId = deckId,
                 activeDeckTitle = deckTitle,
@@ -115,14 +149,103 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 isBacklogActive = sessionQueue.isBacklogActive,
                 totalOverdueCount = sessionQueue.totalOverdueCount,
                 isNewMaterialBlocked = sessionQueue.isNewMaterialBlocked,
-                isLoading = false
+                isLoading = false,
+                userTypedAnswer = "",
+                hasCheckedAnswer = false,
+                isAnswerCorrect = false,
+                autoResetToastMessage = null
             )
             refreshQuotaAndBacklogStatus()
         }
     }
 
+    fun setUserTypedAnswer(text: String) {
+        _sessionState.update { it.copy(userTypedAnswer = text) }
+    }
+
     fun revealAnswer() {
         _sessionState.value = _sessionState.value.copy(isAnswerRevealed = true)
+    }
+
+    fun checkTypedAnswer() {
+        val state = _sessionState.value
+        val card = state.queue.getOrNull(state.currentIndex) ?: return
+        val typed = state.userTypedAnswer.trim().lowercase()
+        val expected = card.answer.trim().lowercase()
+
+        // Robust matching: exact or clean normalized match
+        val cleanTyped = typed.replace(Regex("[^a-zA-Zа-яА-Я0-9]"), "")
+        val cleanExpected = expected.replace(Regex("[^a-zA-Zа-яА-Я0-9]"), "")
+        val isCorrect = cleanTyped.isNotEmpty() && (cleanTyped == cleanExpected || expected.contains(typed))
+
+        val mode = settingsManager.answerCheckMode.value
+
+        if (mode == AnswerCheckMode.AUTO_RESET && !isCorrect) {
+            // Auto reset mode: immediately reset card to Ebbinghaus repetition (BAD rating)
+            viewModelScope.launch {
+                repository.recordCardReview(card, ReviewGrade.BAD)
+                _sessionState.update { current ->
+                    current.copy(
+                        isAnswerRevealed = true,
+                        hasCheckedAnswer = true,
+                        isAnswerCorrect = false,
+                        autoResetToastMessage = "Ответ неверен. Карточка автоматически сброшена в повторение по Эббингаузу (15 мин)."
+                    )
+                }
+                refreshQuotaAndBacklogStatus()
+            }
+        } else {
+            // Manual mode or answer is correct: reveal answer, user sees comparison
+            _sessionState.update {
+                it.copy(
+                    isAnswerRevealed = true,
+                    hasCheckedAnswer = true,
+                    isAnswerCorrect = isCorrect,
+                    autoResetToastMessage = null
+                )
+            }
+        }
+    }
+
+    fun advanceToNextCardAfterAutoReset() {
+        _sessionState.update { current ->
+            val nextIndex = current.currentIndex + 1
+            current.copy(
+                currentIndex = nextIndex,
+                isAnswerRevealed = false,
+                isHintVisible = false,
+                isSessionFinished = nextIndex >= current.queue.size,
+                reviewedCount = current.reviewedCount + 1,
+                userTypedAnswer = "",
+                hasCheckedAnswer = false,
+                isAnswerCorrect = false,
+                autoResetToastMessage = null
+            )
+        }
+        refreshQuotaAndBacklogStatus()
+    }
+
+    fun markCurrentCardMastered() {
+        val state = _sessionState.value
+        val card = state.queue.getOrNull(state.currentIndex) ?: return
+        viewModelScope.launch {
+            repository.markCardAsMastered(card)
+            _sessionState.update { current ->
+                val nextIndex = current.currentIndex + 1
+                current.copy(
+                    currentIndex = nextIndex,
+                    isAnswerRevealed = false,
+                    isHintVisible = false,
+                    isSessionFinished = nextIndex >= current.queue.size,
+                    reviewedCount = current.reviewedCount + 1,
+                    userTypedAnswer = "",
+                    hasCheckedAnswer = false,
+                    isAnswerCorrect = false,
+                    autoResetToastMessage = null
+                )
+            }
+            refreshQuotaAndBacklogStatus()
+        }
     }
 
     fun toggleHint() {
@@ -141,7 +264,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     isAnswerRevealed = false,
                     isHintVisible = false,
                     isSessionFinished = nextIndex >= current.queue.size,
-                    reviewedCount = current.reviewedCount + 1
+                    reviewedCount = current.reviewedCount + 1,
+                    userTypedAnswer = "",
+                    hasCheckedAnswer = false,
+                    isAnswerCorrect = false,
+                    autoResetToastMessage = null
                 )
             }
             refreshQuotaAndBacklogStatus()
@@ -153,9 +280,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return state.queue.getOrNull(state.currentIndex)
     }
 
-    fun createDeck(title: String, description: String, category: String, colorHex: String, iconName: String) {
+    fun createDeck(
+        title: String,
+        description: String,
+        category: String,
+        level: String = "BASIC",
+        colorHex: String,
+        iconName: String
+    ) {
         viewModelScope.launch {
-            repository.createDeck(title, description, category, colorHex, iconName)
+            repository.createDeck(title, description, category, level, colorHex, iconName)
         }
     }
 
@@ -189,9 +323,61 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun markCardAsMastered(card: FlashcardEntity) {
+        viewModelScope.launch {
+            repository.markCardAsMastered(card)
+            refreshQuotaAndBacklogStatus()
+        }
+    }
+
     fun resetDemoDecks() {
         viewModelScope.launch {
             repository.resetDemoDecks()
+            refreshQuotaAndBacklogStatus()
+        }
+    }
+
+    fun generateDeckWithAi(prompt: String, level: String, count: Int = 8) {
+        viewModelScope.launch {
+            _aiState.value = AiGenerationState.Loading
+            val result = aiService.generateCardsForTopic(prompt, level, count)
+            result.onSuccess { deckResult ->
+                _aiState.value = AiGenerationState.Success(deckResult)
+            }.onFailure { error ->
+                _aiState.value = AiGenerationState.Error(error.localizedMessage ?: "Ошибка генерации")
+            }
+        }
+    }
+
+    fun clearAiState() {
+        _aiState.value = AiGenerationState.Idle
+    }
+
+    fun saveGeneratedAiDeck(
+        deckResult: GeneratedDeckResult,
+        colorHex: String = "#8B5CF6",
+        iconName: String = "psychology"
+    ) {
+        viewModelScope.launch {
+            val deckId = repository.createDeck(
+                title = deckResult.title,
+                description = deckResult.description,
+                category = deckResult.category,
+                level = deckResult.level,
+                colorHex = colorHex,
+                iconName = iconName
+            )
+            val cards = deckResult.cards.map {
+                FlashcardEntity(
+                    deckId = deckId,
+                    question = it.question,
+                    answer = it.answer,
+                    hint = it.hint,
+                    status = CardStatus.NEW
+                )
+            }
+            repository.createCards(cards)
+            _aiState.value = AiGenerationState.Idle
             refreshQuotaAndBacklogStatus()
         }
     }

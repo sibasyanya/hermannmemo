@@ -20,11 +20,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,6 +36,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -53,7 +58,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.algorithm.EbbinghausEngine
 import com.example.data.model.CardStatus
+import com.example.data.model.DeckEntity
 import com.example.data.model.FlashcardEntity
 import com.example.ui.theme.BadGradeColor
 import com.example.ui.theme.BadGradeContainer
@@ -80,6 +87,8 @@ fun DeckDetailScreen(
 
     var selectedFilter by remember { mutableStateOf<CardStatus?>(null) }
     var showAddCardDialog by remember { mutableStateOf(false) }
+    var showEditDeckDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var editingCard by remember { mutableStateOf<FlashcardEntity?>(null) }
 
     val filteredCards = if (selectedFilter == null) {
@@ -117,6 +126,25 @@ fun DeckDetailScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
+                    IconButton(
+                        onClick = { showEditDeckDialog = true },
+                        modifier = Modifier.testTag("edit_deck_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Редактировать тему"
+                        )
+                    }
+                    IconButton(
+                        onClick = { showDeleteConfirmDialog = true },
+                        modifier = Modifier.testTag("delete_deck_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Удалить тему",
+                            tint = BadGradeColor
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -141,7 +169,7 @@ fun DeckDetailScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Deck Overview Info
+            // Deck Overview Info with Level
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -152,12 +180,31 @@ fun DeckDetailScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = deck?.category ?: "",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = deck?.category ?: "",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            val (levelLabel, levelTextCol, levelBgCol) = getLevelBadge(deck?.level ?: "BASIC")
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(levelBgCol)
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = levelLabel,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = levelTextCol
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = deck?.description ?: "",
                             style = MaterialTheme.typography.bodyMedium,
@@ -168,6 +215,69 @@ fun DeckDetailScreen(
                             InfoBadge("Всего карточек", "${cards.size}")
                             InfoBadge("Новых", "${cards.count { it.status == CardStatus.NEW }}")
                             InfoBadge("В архиве", "${cards.count { it.status == CardStatus.MASTERED }}")
+                        }
+                    }
+                }
+            }
+
+            // Progress Forecast Card (User Request 3)
+            item {
+                val forecast = remember(cards) { EbbinghausEngine.calculateProgressForecast(cards) }
+                Card(
+                    modifier = Modifier.fillMaxWidth().testTag("deck_progress_forecast_card"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Timeline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Прогноз изучения темы",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Text(
+                                text = "${forecast.progressPercentage}%",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { forecast.progressPercentage / 100f },
+                            modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = forecast.forecastDescription,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Новые: ${forecast.newCards}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("В процессе: ${forecast.learningCards}", style = MaterialTheme.typography.labelSmall, color = NormalGradeColor)
+                            Text("Повторение: ${forecast.reviewCards}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text("Освоено: ${forecast.masteredCards}", style = MaterialTheme.typography.labelSmall, color = ExcellentGradeColor)
                         }
                     }
                 }
@@ -223,7 +333,8 @@ fun DeckDetailScreen(
                     CardListItem(
                         card = card,
                         onEdit = { editingCard = card },
-                        onDelete = { viewModel.deleteCard(card.id) }
+                        onDelete = { viewModel.deleteCard(card.id) },
+                        onMarkMastered = { viewModel.markCardAsMastered(card) }
                     )
                 }
             }
@@ -261,6 +372,144 @@ fun DeckDetailScreen(
             }
         )
     }
+
+    val currentDeck = deck
+    if (showEditDeckDialog && currentDeck != null) {
+        EditDeckDialog(
+            deck = currentDeck,
+            onDismiss = { showEditDeckDialog = false },
+            onConfirm = { title, desc, cat, level ->
+                viewModel.updateDeck(currentDeck.copy(title = title, description = desc, category = cat, level = level))
+                showEditDeckDialog = false
+            }
+        )
+    }
+
+    if (showDeleteConfirmDialog && currentDeck != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = {
+                Text(
+                    text = "Удалить тему?",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text("Вы действительно хотите удалить тему «${currentDeck.title}» и все входящие в неё карточки (${cards.size} шт.)? Это действие нельзя отменить.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteDeck(deckId)
+                        showDeleteConfirmDialog = false
+                        onNavigateBack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BadGradeColor)
+                ) {
+                    Text("Удалить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
+}
+
+fun getLevelBadge(level: String): Triple<String, Color, Color> {
+    return when (level.uppercase()) {
+        "EXPERT" -> Triple("Эксперт (Профи)", Color(0xFF6B21A8), Color(0xFFF3E8FF))
+        "ADVANCED" -> Triple("Продвинутый (Специалист)", Color(0xFFC2410C), Color(0xFFFFEDD5))
+        else -> Triple("Элементарный (Базовый)", Color(0xFF0369A1), Color(0xFFE0F2FE))
+    }
+}
+
+@Composable
+fun EditDeckDialog(
+    deck: DeckEntity,
+    onDismiss: () -> Unit,
+    onConfirm: (title: String, description: String, category: String, level: String) -> Unit
+) {
+    var title by remember { mutableStateOf(deck.title) }
+    var description by remember { mutableStateOf(deck.description) }
+    var category by remember { mutableStateOf(deck.category) }
+    var selectedLevel by remember { mutableStateOf(deck.level.ifBlank { "BASIC" }) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Редактировать тему",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Название темы") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Описание темы") },
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = { category = it },
+                    label = { Text("Категория") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text(
+                    text = "Уровень сложности:",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(
+                        "BASIC" to "Базовый",
+                        "ADVANCED" to "Специалист",
+                        "EXPERT" to "Профи"
+                    ).forEach { (lvlCode, lvlName) ->
+                        FilterChip(
+                            selected = selectedLevel.equals(lvlCode, ignoreCase = true),
+                            onClick = { selectedLevel = lvlCode },
+                            label = { Text(lvlName, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (title.isNotBlank()) {
+                        onConfirm(title.trim(), description.trim(), category.trim(), selectedLevel)
+                    }
+                },
+                enabled = title.isNotBlank()
+            ) {
+                Text("Сохранить")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена")
+            }
+        }
+    )
 }
 
 @Composable
@@ -283,7 +532,8 @@ private fun InfoBadge(label: String, value: String) {
 private fun CardListItem(
     card: FlashcardEntity,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onMarkMastered: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -300,7 +550,18 @@ private fun CardListItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 StatusChip(card.status)
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onMarkMastered,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DoneAll,
+                            contentDescription = "Отметить как освоенную",
+                            tint = if (card.status == CardStatus.MASTERED) ExcellentGradeColor else MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                     IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
                         Icon(
                             imageVector = Icons.Default.Edit,

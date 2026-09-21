@@ -65,6 +65,7 @@ class StudyRepository(
         title: String,
         description: String,
         category: String,
+        level: String = "BASIC",
         colorHex: String,
         iconName: String
     ): Long = withContext(Dispatchers.IO) {
@@ -72,6 +73,7 @@ class StudyRepository(
             title = title,
             description = description,
             category = category,
+            level = level,
             colorHex = colorHex,
             iconName = iconName,
             isDefault = false
@@ -85,6 +87,10 @@ class StudyRepository(
 
     suspend fun deleteDeck(deckId: Long) = withContext(Dispatchers.IO) {
         deckDao.deleteDeckById(deckId)
+    }
+
+    suspend fun createCards(cards: List<FlashcardEntity>) = withContext(Dispatchers.IO) {
+        flashcardDao.insertCards(cards)
     }
 
     suspend fun createCard(
@@ -135,6 +141,7 @@ class StudyRepository(
 
     suspend fun prepareStudySession(
         deckId: Long?,
+        strictBacklogBlocking: Boolean = false,
         currentTime: Long = System.currentTimeMillis()
     ): StudySessionQueue = withContext(Dispatchers.IO) {
         val todayQuota = getTodayQuota()
@@ -153,8 +160,8 @@ class StudyRepository(
         val reviewPortion = allDueCards.take(EbbinghausEngine.DAILY_REVIEW_PORTION)
 
         // 2. New cards logic:
-        // If backlog defense is active or overdue cards remain, block new material!
-        val newCards = if (isBacklog || overdueCount > 0) {
+        val blockNew = if (strictBacklogBlocking) (isBacklog || overdueCount > 0) else isBacklog
+        val newCards = if (blockNew) {
             emptyList()
         } else {
             // Check daily quota for new cards (Miller's wallet: max 20 per day)
@@ -176,8 +183,25 @@ class StudyRepository(
             isBacklogActive = isBacklog,
             totalOverdueCount = overdueCount,
             todayQuota = todayQuota,
-            isNewMaterialBlocked = isBacklog || overdueCount > 0
+            isNewMaterialBlocked = blockNew
         )
+    }
+
+    suspend fun markCardAsMastered(
+        card: FlashcardEntity,
+        currentTime: Long = System.currentTimeMillis()
+    ): FlashcardEntity = withContext(Dispatchers.IO) {
+        val updated = card.copy(
+            status = CardStatus.MASTERED,
+            repetitionCount = (card.repetitionCount + 1).coerceAtLeast(6),
+            intervalDays = EbbinghausEngine.LONG_TERM_ARCHIVE_DAYS,
+            easeFactor = 2.8,
+            dueDate = currentTime + (EbbinghausEngine.LONG_TERM_ARCHIVE_DAYS * 24 * 60 * 60 * 1000L).toLong(),
+            lastReviewedAt = currentTime,
+            isHeavy = false
+        )
+        flashcardDao.updateCard(updated)
+        updated
     }
 
     suspend fun recordCardReview(
