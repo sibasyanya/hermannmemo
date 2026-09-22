@@ -117,6 +117,10 @@ class StudyRepository(
         flashcardDao.deleteCardById(cardId)
     }
 
+    suspend fun getCardById(cardId: Long): FlashcardEntity? = withContext(Dispatchers.IO) {
+        flashcardDao.getCardById(cardId)
+    }
+
     suspend fun getTodayQuota(): DailyQuotaEntity = withContext(Dispatchers.IO) {
         val today = getTodayDateString()
         dailyQuotaDao.getQuota(today) ?: DailyQuotaEntity(dateString = today)

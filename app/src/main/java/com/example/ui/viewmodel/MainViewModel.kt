@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.algorithm.EbbinghausEngine
 import com.example.data.ai.AiCardGeneratorService
+import com.example.data.ai.GeneratedCard
 import com.example.data.ai.GeneratedDeckResult
 import com.example.data.db.AppDatabase
 import com.example.data.local.AnswerCheckMode
@@ -330,9 +331,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun markCardMastered(cardId: Long) {
+        viewModelScope.launch {
+            val card = repository.getCardById(cardId) ?: return@launch
+            repository.markCardAsMastered(card)
+            refreshQuotaAndBacklogStatus()
+        }
+    }
+
     fun resetDemoDecks() {
         viewModelScope.launch {
             repository.resetDemoDecks()
+            refreshQuotaAndBacklogStatus()
+        }
+    }
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    fun refreshAllData() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            refreshQuotaAndBacklogStatus()
+            kotlinx.coroutines.delay(500)
+            _isRefreshing.value = false
+        }
+    }
+
+    suspend fun testAiConnection(): Result<String> {
+        return aiService.testConnection()
+    }
+
+    suspend fun generateCardAssistance(topic: String, question: String, existingAnswer: String): Result<GeneratedCard> {
+        return aiService.generateCardAssistance(topic, question, existingAnswer)
+    }
+
+    fun addGeneratedCardsToExistingDeck(deckId: Long, cards: List<GeneratedCard>) {
+        viewModelScope.launch {
+            val entities = cards.map {
+                FlashcardEntity(
+                    deckId = deckId,
+                    question = it.question,
+                    answer = it.answer,
+                    hint = it.hint,
+                    status = CardStatus.NEW
+                )
+            }
+            repository.createCards(entities)
+            _aiState.value = AiGenerationState.Idle
             refreshQuotaAndBacklogStatus()
         }
     }

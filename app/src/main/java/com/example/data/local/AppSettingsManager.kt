@@ -12,7 +12,7 @@ enum class AnswerCheckMode {
 }
 
 enum class AiProvider(val displayName: String, val defaultModel: String, val defaultEndpoint: String) {
-    GEMINI("Google Gemini (Бесплатный ключ AI Studio)", "gemini-2.0-flash", "https://generativelanguage.googleapis.com/v1beta/models/"),
+    GEMINI("Google Gemini (Бесплатный ключ AI Studio)", "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta/models/"),
     OPENROUTER("OpenRouter (Бесплатные и платные модели)", "google/gemini-2.0-flash-lite-001", "https://openrouter.ai/api/v1/chat/completions"),
     GROQ("Groq (Сверхбыстрые Llama/Mixtral)", "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1/chat/completions"),
     OPENAI("OpenAI (ChatGPT / GPT-4o)", "gpt-4o-mini", "https://api.openai.com/v1/chat/completions"),
@@ -53,7 +53,7 @@ class AppSettingsManager(context: Context) {
     val aiApiKey: StateFlow<String> = _aiApiKey.asStateFlow()
 
     private val _aiModel = MutableStateFlow(
-        prefs.getString("ai_model", "gemini-2.0-flash") ?: "gemini-2.0-flash"
+        prefs.getString("ai_model", "gemini-2.5-flash") ?: "gemini-2.5-flash"
     )
     val aiModel: StateFlow<String> = _aiModel.asStateFlow()
 

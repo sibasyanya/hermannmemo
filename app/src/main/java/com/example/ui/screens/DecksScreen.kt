@@ -50,10 +50,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -92,6 +94,7 @@ fun DecksScreen(
     val isBacklogActive by viewModel.isBacklogActive.collectAsState()
     val overdueCardsCount by viewModel.overdueCardsCount.collectAsState()
     val aiState by viewModel.aiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var showAiCreateDialog by remember { mutableStateOf(false) }
@@ -143,13 +146,18 @@ fun DecksScreen(
             }
         }
     ) { innerPadding ->
-        LazyColumn(
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refreshAllData() },
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(innerPadding)
         ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
             // Cognitive Limits & Miller's Wallet Card
             item {
                 MillerWalletHeader(
@@ -351,6 +359,7 @@ fun DecksScreen(
             }
         }
     }
+}
 
     if (showCreateDialog) {
         CreateDeckDialog(
@@ -712,11 +721,29 @@ private fun CreateDeckDialog(
                         "ADVANCED" to "Специалист",
                         "EXPERT" to "Профи"
                     ).forEach { (lvlCode, lvlName) ->
-                        FilterChip(
-                            selected = level == lvlCode,
+                        val isSelected = level == lvlCode
+                        Surface(
+                            selected = isSelected,
                             onClick = { level = lvlCode },
-                            label = { Text(lvlName, fontSize = 12.sp) }
-                        )
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = lvlName,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 12.sp
+                                    ),
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -804,11 +831,29 @@ private fun AiCreateDeckDialog(
                                 "ADVANCED" to "Специалист",
                                 "EXPERT" to "Профи"
                             ).forEach { (lvlCode, lvlName) ->
-                                FilterChip(
-                                    selected = level == lvlCode,
+                                val isSelected = level == lvlCode
+                                Surface(
+                                    selected = isSelected,
                                     onClick = { level = lvlCode },
-                                    label = { Text(lvlName, fontSize = 12.sp) }
-                                )
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                ) {
+                                    Box(
+                                        modifier = Modifier.padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = lvlName,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                fontSize = 12.sp
+                                            ),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -818,14 +863,32 @@ private fun AiCreateDeckDialog(
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             listOf(5, 8, 10, 15).forEach { count ->
-                                FilterChip(
-                                    selected = cardCount == count,
+                                val isSelected = cardCount == count
+                                Surface(
+                                    selected = isSelected,
                                     onClick = { cardCount = count },
-                                    label = { Text("$count шт.") }
-                                )
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                ) {
+                                    Box(
+                                        modifier = Modifier.padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "$count шт.",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                fontSize = 12.sp
+                                            ),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -925,8 +988,14 @@ private fun AiCreateDeckDialog(
                     }
                 }
                 is AiGenerationState.Error -> {
-                    Button(onClick = onDismiss) {
-                        Text("Понятно")
+                    Button(
+                        onClick = {
+                            if (prompt.isNotBlank()) {
+                                onGenerate(prompt.trim(), level, cardCount)
+                            }
+                        }
+                    ) {
+                        Text("Повторить попытку")
                     }
                 }
                 is AiGenerationState.Loading -> { /* no-op */ }

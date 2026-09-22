@@ -2,8 +2,10 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -25,8 +27,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -54,6 +59,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,6 +70,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +84,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.example.data.local.AiProvider
 import com.example.data.local.AnswerCheckMode
 import com.example.data.remote.UpdateCheckerService
@@ -85,6 +93,7 @@ import com.example.ui.theme.ExcellentGradeColor
 import com.example.ui.theme.ExcellentGradeContainer
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.UpdateUiState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,6 +118,10 @@ fun SettingsScreen(
     var showApiKey by remember { mutableStateOf(false) }
     var providerDropdownExpanded by remember { mutableStateOf(false) }
     var testNotificationSent by remember { mutableStateOf(false) }
+    var isTestingAi by remember { mutableStateOf(false) }
+    var aiTestResult by remember { mutableStateOf<String?>(null) }
+    var isAiTestSuccess by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -116,8 +129,14 @@ fun SettingsScreen(
         if (isGranted) {
             settingsManager.setNotificationsEnabled(true)
             ReminderNotificationManager.scheduleDailyReminder(context, 10, 0)
+            val sent = ReminderNotificationManager.showTestNotification(context)
+            if (sent) {
+                testNotificationSent = true
+                Toast.makeText(context, "🔔 Тестовое уведомление доставлено в шторку Android!", Toast.LENGTH_LONG).show()
+            }
         } else {
             settingsManager.setNotificationsEnabled(false)
+            Toast.makeText(context, "Разрешение на показ уведомлений отклонено.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -395,10 +414,23 @@ fun SettingsScreen(
 
                             OutlinedButton(
                                 onClick = {
-                                    ReminderNotificationManager.showTestNotification(context)
-                                    testNotificationSent = true
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else if (!ReminderNotificationManager.areNotificationsEnabled(context)) {
+                                        Toast.makeText(context, "Уведомления отключены в системе. Открываем настройки...", Toast.LENGTH_LONG).show()
+                                        ReminderNotificationManager.openNotificationSettings(context)
+                                    } else {
+                                        val sent = ReminderNotificationManager.showTestNotification(context)
+                                        if (sent) {
+                                            testNotificationSent = true
+                                            Toast.makeText(context, "🔔 Тестовое уведомление доставлено в верхнюю шторку Android!", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            Toast.makeText(context, "Не удалось отправить уведомление. Проверьте системные настройки.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
                                 },
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth().testTag("send_test_notification_button")
                             ) {
                                 Icon(imageVector = Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -503,10 +535,69 @@ fun SettingsScreen(
                             onValueChange = { settingsManager.setAiModel(it) },
                             label = { Text("Модель") },
                             placeholder = { Text(aiProvider.defaultModel) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().testTag("ai_model_input"),
                             shape = RoundedCornerShape(12.dp),
                             singleLine = true
                         )
+
+                        val modelPresets = when (aiProvider) {
+                            AiProvider.GEMINI -> listOf(
+                                "gemini-2.5-flash",
+                                "gemini-2.0-flash",
+                                "gemini-1.5-flash"
+                            )
+                            AiProvider.GROQ -> listOf(
+                                "llama-3.3-70b-versatile",
+                                "mixtral-8x7b-32768"
+                            )
+                            AiProvider.OPENROUTER -> listOf(
+                                "google/gemini-2.0-flash-lite-001",
+                                "meta-llama/llama-3.3-70b-instruct:free"
+                            )
+                            AiProvider.OPENAI -> listOf(
+                                "gpt-4o-mini",
+                                "gpt-4o"
+                            )
+                            AiProvider.CUSTOM -> emptyList()
+                        }
+
+                        if (modelPresets.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Быстрый выбор модели:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                modelPresets.forEach { mCode ->
+                                    val isCurrent = aiModel == mCode
+                                    val shortLabel = mCode.substringAfterLast("/").replace("gemini-", "").replace("-flash", " flash")
+                                    Surface(
+                                        selected = isCurrent,
+                                        onClick = { settingsManager.setAiModel(mCode) },
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.padding(vertical = 6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = shortLabel,
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal),
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         if (aiProvider == AiProvider.CUSTOM) {
                             Spacer(modifier = Modifier.height(10.dp))
@@ -533,6 +624,67 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        OutlinedButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    isTestingAi = true
+                                    aiTestResult = null
+                                    val res = viewModel.testAiConnection()
+                                    isTestingAi = false
+                                    res.onSuccess { msg ->
+                                        isAiTestSuccess = true
+                                        aiTestResult = msg
+                                    }.onFailure { err ->
+                                        isAiTestSuccess = false
+                                        aiTestResult = err.localizedMessage ?: "Сбой подключения к AI"
+                                    }
+                                }
+                            },
+                            enabled = !isTestingAi && aiApiKey.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth().testTag("test_ai_connection_button")
+                        ) {
+                            if (isTestingAi) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Проверка связи с моделью...")
+                            } else {
+                                Icon(imageVector = Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Проверить подключение к AI")
+                            }
+                        }
+
+                        aiTestResult?.let { msg ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isAiTestSuccess) Color(0xFFDCFCE7) else MaterialTheme.colorScheme.errorContainer
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Icon(
+                                        imageVector = if (isAiTestSuccess) Icons.Default.CheckCircle else Icons.Default.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = if (isAiTestSuccess) Color(0xFF15803D) else MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = msg,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (isAiTestSuccess) Color(0xFF15803D) else MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
